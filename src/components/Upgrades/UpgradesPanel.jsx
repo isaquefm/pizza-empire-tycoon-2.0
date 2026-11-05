@@ -1,7 +1,7 @@
 import React from 'react'
 import { Flame, Zap, Megaphone, Pizza, Building2, Crown, Lock, CheckCircle2, ArrowUp } from 'lucide-react'
 import { useGame } from '../../systems/store'
-import { ovenUpgradeCost, speedUpgradeCost, marketingCost, MAX_MARKETING, EXPANSIONS, franchiseCost, pizzaPrice } from '../../systems/Economy/economy'
+import { ovenUpgradeCost, speedUpgradeCost, marketingCost, MAX_MARKETING, EXPANSIONS, franchiseCost, franchiseReq, canFranchise, pizzaPrice } from '../../systems/Economy/economy'
 import { RECIPES } from '../../data/recipes'
 import { money, SectionHead } from '../ui'
 
@@ -60,11 +60,13 @@ export function UpgradesPanel() {
     <div className="upgrade-card franchise">
       <div className="upgrade-icon"><Crown /></div>
       <div className="upgrade-main"><b>Nova unidade (franquia)</b>
-        <p>Abra uma nova pizzaria: a unidade atual é reiniciada, mas você mantém o saldo e as receitas, sobe 1 nível e ganha +15% de faturamento permanente por unidade. Unidades abertas: {s.franchises}.</p></div>
-      <button disabled={!s.unlocked.franchise} onClick={() => {
-        if (!confirm('Abrir uma nova unidade? A pizzaria atual será reiniciada (equipe, equipamentos e mesas).')) return
-        say(s.buyFranchise(), 'Nova unidade inaugurada! Bem-vindo à próxima etapa do império.')
-      }}>{s.unlocked.franchise ? money(franchiseCost(s.franchises)) : 'Nível 5'}</button>
+        <p>Abra uma nova pizzaria: a unidade atual é reiniciada, mas você mantém o saldo e as receitas, sobe 1 nível e ganha +15% de faturamento permanente por unidade. Requisitos: nível {franchiseReq(s.franchises).level} e {franchiseReq(s.franchises).served} pedidos nesta unidade ({s.served} até agora). Custo: {money(franchiseCost(s.franchises))}. Unidades abertas: {s.franchises}.</p></div>
+      <button disabled={!canFranchise(s)} onClick={() => s.ask({
+        title: 'Abrir uma nova unidade?',
+        text: 'A pizzaria atual será reiniciada: equipe, equipamentos e mesas. Você mantém o saldo, as receitas e as metas.',
+        confirmLabel: `Abrir por ${money(franchiseCost(s.franchises))}`,
+        onConfirm: () => say(s.buyFranchise(), 'Nova unidade inaugurada! Bem-vindo à próxima etapa do império.'),
+      })}>{canFranchise(s) ? money(franchiseCost(s.franchises)) : `Nível ${franchiseReq(s.franchises).level}`}</button>
     </div>
   </>
 }

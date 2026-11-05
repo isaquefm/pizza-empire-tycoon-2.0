@@ -3,6 +3,7 @@ import { Paintbrush, Wrench, Hammer, Expand, ArrowUp, Pizza, Flame } from 'lucid
 import { useGame } from '../../systems/store'
 import { expandCost, maxTables, maintenanceCost, reformCost, MAX_REFORM } from '../../systems/Economy/economy'
 import { kitchenBoost } from '../../systems/simulation'
+import { sfx } from '../../systems/audio'
 import { money } from '../ui'
 
 export function BottomBar() {
@@ -12,7 +13,9 @@ export function BottomBar() {
   const maint = maintenanceCost(s)
   const ampliar = () => {
     if (full) { useGame.setState({ tab: 'Melhorias' }); s.notify('Salão no limite. Veja as ampliações em Melhorias.', 'info'); return }
-    s.notify(s.expand() ? 'Salão ampliado! +2 mesas.' : 'Saldo insuficiente para ampliar.', 'success')
+    const ok = s.expand()
+    if (ok) sfx('upgrade')
+    s.notify(ok ? 'Salão ampliado! +2 mesas.' : 'Saldo insuficiente para ampliar.', ok ? 'success' : 'warn')
   }
   const reformar = () => {
     if (s.reformLevel >= MAX_REFORM) { s.notify('A reforma já está completa.', 'info'); return }

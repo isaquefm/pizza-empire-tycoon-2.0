@@ -151,9 +151,9 @@ export function customerPaid(c, s, mods, api) {
   c.handler = null
   const p = c.patienceAtServe ?? c.patience
   const sat = Math.max(5, Math.min(100, Math.round(38 + p * 42 + mods.comfort + Math.min(12, s.ovenLevel * 2))))
-  const tip = sat >= 85 ? Math.round(c.price * 0.15) : sat >= 70 ? Math.round(c.price * 0.06) : 0
+  const tip = Math.round((sat >= 85 ? c.price * 0.15 : sat >= 70 ? c.price * 0.06 : 0) * mods.tipMult)
   api.chargeIngredients(c.cost)
-  api.completeSale({ amount: c.price, tip, satisfaction: sat })
+  api.completeSale({ amount: c.price, tip, satisfaction: sat, recipe: c.recipe })
   c.sat = sat
   c.mood = sat >= 60 ? 'happy' : sat >= 40 ? 'neutral' : 'impatient'
   c.carry = null

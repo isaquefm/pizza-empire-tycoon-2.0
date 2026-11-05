@@ -2,9 +2,13 @@ import React from 'react'
 import {
   Utensils, Refrigerator, Package, ChefHat, Calculator, Cog, Flame, Lamp, Armchair, GlassWater,
   Music, Snowflake, Sparkles, Sprout, Frame, Lightbulb, Pizza,
+  Wheat, Wind, Tablet, Layers, MonitorSmartphone, Tv, CakeSlice, Wine, Wifi, Fan, Disc3, PenLine, Flag, Beer, Zap,
 } from 'lucide-react'
 
-export const ICONS = { Utensils, Refrigerator, Package, ChefHat, Calculator, Cog, Flame, Lamp, Armchair, GlassWater, Music, Snowflake, Sparkles, Sprout, Frame, Lightbulb, Pizza }
+export const ICONS = {
+  Utensils, Refrigerator, Package, ChefHat, Calculator, Cog, Flame, Lamp, Armchair, GlassWater, Music, Snowflake, Sparkles, Sprout, Frame, Lightbulb, Pizza,
+  Wheat, Wind, Tablet, Layers, MonitorSmartphone, Tv, CakeSlice, Wine, Wifi, Fan, Disc3, PenLine, Flag, Beer, Zap,
+}
 
 export const fmt = (n) => Math.round(n).toLocaleString('pt-BR')
 export const money = (n) => `R$ ${fmt(n)}`

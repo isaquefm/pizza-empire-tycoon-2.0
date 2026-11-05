@@ -164,6 +164,84 @@ function Dining({ tables, owned, cloth, terrace, snap }) {
   </group>
 }
 
+// Itens adicionais da loja, posicionados em paredes, teto, balcão e cantos livres
+// (fora das rotas de pathfinding).
+function ExtraItems({ owned }) {
+  const steel = mat('#c4ccd4', { r: 0.25, m: 0.8 })
+  const dark = mat('#2a2d36', { r: 0.4 })
+  const oak = mat('#8b5a35', { r: 0.7 })
+  const FLAG_COLORS = ['#2f9e5b', '#f7f2e8', '#d8453a']
+  return <group>
+    {owned.freezer && <group position={[7.45, 0.08, -3.7]}>
+      <mesh geometry={roundedBox(0.75, 1.9, 0.9, 0.04)} material={mat('#e9edf1', { r: 0.3, m: 0.3 })} position={[0, 0.95, 0]} castShadow />
+      <mesh geometry={G.box} material={mat('#8fd0ee', { e: '#8fd0ee', ei: 0.3, r: 0.1 })} scale={[0.02, 0.8, 0.6]} position={[-0.385, 1.2, 0]} />
+      <mesh geometry={G.box} material={steel} scale={[0.04, 0.5, 0.04]} position={[-0.4, 1.0, 0.36]} />
+    </group>}
+    {owned.ferment && <group position={[-7.55, 0.08, -3.3]}>
+      <mesh geometry={roundedBox(0.7, 1.5, 0.7, 0.03)} material={steel} position={[0, 0.75, 0]} castShadow />
+      {[0, 1, 2].map((i) => <mesh key={i} geometry={G.box} material={mat('#e7c58f', { r: 0.8 })} scale={[0.02, 0.05, 0.55]} position={[0.355, 0.5 + i * 0.4, 0]} />)}
+    </group>}
+    {owned.hood && <group position={[-2, 2.6, -5.3]}>
+      <mesh geometry={roundedBox(4.2, 0.4, 1.1, 0.05)} material={steel} castShadow />
+      <mesh geometry={G.box} material={steel} scale={[0.5, 0.5, 0.5]} position={[0, 0.42, -0.1]} />
+    </group>}
+    {owned.stone && [0, 1, 2].map((i) => <mesh key={i} geometry={roundedBox(0.42, 0.04, 0.42, 0.01, 1)} material={mat('#b5a48e', { r: 1 })} position={[6.55, 1.0 + i * 0.05, -5.42]} />)}
+    {owned.tablet && <group position={[-0.6, 1.15, COUNTER.z]}>
+      <mesh geometry={roundedBox(0.34, 0.24, 0.02, 0.01, 1)} material={mat('#1e2533', { e: '#6bb5ff', ei: 0.5, r: 0.2 })} position={[0, 0.16, 0]} rotation={[-0.35, 0, 0]} />
+      <mesh geometry={G.box} material={dark} scale={[0.14, 0.03, 0.14]} position={[0, 0.02, -0.03]} />
+    </group>}
+    {owned.totem && <group position={[7.45, 0.08, -1.05]} rotation={[0, -Math.PI / 2, 0]}>
+      <mesh geometry={roundedBox(0.5, 1.6, 0.14, 0.04)} material={dark} position={[0, 0.8, 0]} castShadow />
+      <mesh geometry={G.plane} material={mat('#ffffff', { basic: true, map: labelTexture('PEÇA AQUI', { bg: '#3a7fc4', size: 54 }) })} scale={[0.42, 0.42, 1]} position={[0, 1.2, 0.075]} />
+    </group>}
+    {owned.dessert && <group position={[0.1, 1.15, COUNTER.z]}>
+      <mesh geometry={G.cyl} material={mat('#f7f2e8', { r: 0.3 })} scale={[0.3, 0.02, 0.3]} position={[0, 0.02, 0]} />
+      <mesh geometry={G.cyl} material={mat('#7b3f2a', { r: 0.7 })} scale={[0.18, 0.1, 0.18]} position={[0, 0.09, 0]} />
+      <mesh geometry={G.sphereLo} material={mat('#d8453a')} scale={0.035} position={[0, 0.17, 0]} />
+      <mesh geometry={G.sphere ?? G.sphereLo} material={mat('#d8eef5', { r: 0.05, op: 0.3 })} scale={[0.3, 0.32, 0.3]} position={[0, 0.03, 0]} />
+    </group>}
+    {owned.tv && <group position={[7.84, 2.15, 2.4]} rotation={[0, -Math.PI / 2, 0]}>
+      <mesh geometry={roundedBox(1.5, 0.88, 0.07, 0.02)} material={dark} castShadow />
+      <mesh geometry={G.plane} material={mat('#3f9a5a', { e: '#3f9a5a', ei: 0.5 })} scale={[1.38, 0.76, 1]} position={[0, 0, 0.04]} />
+      <mesh geometry={G.box} material={mat('#f7f2e8', { e: '#ffffff', ei: 0.4 })} scale={[0.02, 0.76, 0.005]} position={[0, 0, 0.045]} />
+    </group>}
+    {owned.wine && <group position={[-7.82, 1.9, 5.15]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh geometry={roundedBox(1.0, 0.9, 0.2, 0.02)} material={oak} castShadow />
+      {[0, 1].map((row) => [0, 1, 2, 3, 4].map((i) => <mesh key={`${row}${i}`} geometry={G.cylLo} material={mat(i % 2 ? '#4a1f2e' : '#2e4a2a', { r: 0.2 })} scale={[0.05, 0.22, 0.05]} position={[-0.34 + i * 0.17, -0.2 + row * 0.42, 0.12]} />))}
+    </group>}
+    {owned.wifi && <group position={[7.85, 2.65, 0.8]} rotation={[0, -Math.PI / 2, 0]}>
+      <mesh geometry={roundedBox(0.3, 0.07, 0.16, 0.02, 1)} material={mat('#f4f4f4', { r: 0.4 })} />
+      {[-0.1, 0.1].map((x) => <mesh key={x} geometry={G.cylLo} material={dark} scale={[0.008, 0.16, 0.008]} position={[x, 0.11, 0]} />)}
+      <mesh geometry={G.sphereLo} material={mat('#5ad17a', { e: '#5ad17a', ei: 1.5 })} scale={0.012} position={[0.12, 0, 0.085]} />
+    </group>}
+    {owned.fans && [-4, 1].map((x) => <group key={x} position={[x, ROOM.wallH - 0.25, 2.4]}>
+      <mesh geometry={G.cylLo} material={dark} scale={[0.02, 0.25, 0.02]} position={[0, 0.12, 0]} />
+      <mesh geometry={G.cyl} material={dark} scale={[0.1, 0.06, 0.1]} />
+      {[0, Math.PI / 2].map((r) => <mesh key={r} geometry={G.box} material={oak} scale={[1.3, 0.015, 0.16]} rotation={[0, r + 0.4, 0]} />)}
+    </group>)}
+    {owned.jukebox && <group position={[7.5, 0.08, 1.4]} rotation={[0, -Math.PI / 2, 0]}>
+      <mesh geometry={roundedBox(0.75, 1.3, 0.45, 0.1)} material={mat('#a8322a', { r: 0.25 })} position={[0, 0.65, 0]} castShadow />
+      <mesh geometry={G.box} material={mat('#ffd88a', { e: '#ffb84a', ei: 1.4 })} scale={[0.55, 0.42, 0.02]} position={[0, 0.9, 0.23]} />
+      <mesh geometry={G.box} material={mat('#6bb5ff', { e: '#6bb5ff', ei: 1 })} scale={[0.55, 0.05, 0.02]} position={[0, 0.5, 0.23]} />
+    </group>}
+    {owned.barrels && [[2.1, 0], [2.75, 0]].map(([z]) => <group key={z} position={[-7.55, 0.08, z]}>
+      <mesh geometry={G.cyl} material={oak} scale={[0.28, 0.42, 0.28]} position={[0, 0.42, 0]} castShadow />
+      {[0.2, 0.62].map((y) => <mesh key={y} geometry={G.cyl} material={mat('#3a3f4a', { r: 0.4, m: 0.6 })} scale={[0.29, 0.02, 0.29]} position={[0, y, 0]} />)}
+    </group>)}
+    {owned.chalkboard && <group position={[-7.84, 2.05, -0.9]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh geometry={roundedBox(0.95, 0.7, 0.04, 0.01, 1)} material={oak} />
+      <mesh geometry={G.plane} material={mat('#ffffff', { map: menuBoard() })} scale={[0.85, 0.6, 1]} position={[0, 0, 0.025]} />
+    </group>}
+    {owned.bunting && [1.2, 3.6].map((z) => <group key={z}>
+      {Array.from({ length: 20 }, (_, i) => <mesh key={i} geometry={G.cone} material={mat(FLAG_COLORS[i % 3], { r: 0.8, side: THREE.DoubleSide })} scale={[0.1, -0.16, 0.02]} position={[-7.6 + i * 0.8, 2.72 - Math.sin((i / 19) * Math.PI) * 0.18, z]} />)}
+    </group>)}
+    {owned.neon && <group position={[7.84, 2.25, 4.2]} rotation={[0, -Math.PI / 2, 0]}>
+      <mesh geometry={G.plane} material={mat('#ffffff', { basic: true, map: labelTexture('PIZZA', { bg: '#7b2d8b', fg: '#ffe9ff', size: 80 }) })} scale={[1.2, 0.42, 1]} />
+      <mesh geometry={G.plane} material={mat('#ffffff', { basic: true, map: glow('#ff5ad1'), op: 0.45 })} scale={[1.9, 1, 1]} position={[0, 0, -0.01]} />
+    </group>}
+  </group>
+}
+
 function Decor({ owned, wallColor }) {
   return <group>
     {owned.plants && [[-7.5, 5.5, 0], [-7.5, -1.0, 1], [7.4, 5.4, 0], [3.9, 5.5, 1], [-3.0, 5.55, 0], [7.4, 0.2, 1]].map(([x, z, k], i) =>
@@ -173,6 +251,8 @@ function Decor({ owned, wallColor }) {
       <mesh geometry={G.cyl} material={mat('#8fd0ee', { r: 0.05, op: 0.7 })} scale={[0.17, 0.42, 0.17]} position={[0, 1.22, 0]} />
       <mesh geometry={G.box} material={mat('#3b6fb6')} scale={[0.1, 0.05, 0.06]} position={[0.12, 0.75, 0.24]} />
     </group>}
+    <ExtraItems owned={owned} />
+
     {owned.music && [[-7.8, 2.6, 0.5, Math.PI / 2], [-7.8, 2.6, 4.5, Math.PI / 2], [0, 2.6, -5.8, 0]].map(([x, y, z, r], i) =>
       <group key={i} position={[x, y, z]} rotation={[0, r, 0]}>
         <mesh geometry={roundedBox(0.3, 0.45, 0.22, 0.03)} material={mat('#2a2d36', { r: 0.4 })} />

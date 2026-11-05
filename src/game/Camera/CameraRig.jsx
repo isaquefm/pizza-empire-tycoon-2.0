@@ -16,10 +16,13 @@ export function CameraRig() {
   const cur = useRef({ ...HOME })
   const keys = useRef({})
   const drag = useRef(null)
+  const focusBack = useRef(null)
+  const focusTimer = useRef(null)
 
   useEffect(() => {
     const el = gl.domElement
     const down = (e) => {
+      focusBack.current = null // o jogador assumiu a câmera
       drag.current = { x: e.clientX, y: e.clientY, button: e.button, moved: 0 }
       el.setPointerCapture?.(e.pointerId)
     }
@@ -87,6 +90,18 @@ export function CameraRig() {
       case 'kitchen': g.x = 0.5; g.z = -3.8; g.dist = Math.min(g.dist, 16); break
       case 'dining': g.x = -1.5; g.z = 2.4; g.dist = Math.min(g.dist, 18); break
       case 'terrace': g.x = 11.8; g.z = 0; g.dist = Math.min(g.dist, 19); break
+      case 'focus': {
+        // Mostra o item recém-comprado e volta sozinha, a menos que o jogador mexa na câmera
+        const back = focusBack.current || { x: g.x, z: g.z, dist: g.dist }
+        focusBack.current = back
+        g.x = s.cameraCmd.pos[0]; g.z = s.cameraCmd.pos[1]; g.dist = Math.min(g.dist, 15)
+        clearTimeout(focusTimer.current)
+        focusTimer.current = setTimeout(() => {
+          if (focusBack.current) Object.assign(g, focusBack.current)
+          focusBack.current = null
+        }, 2600)
+        break
+      }
       default: break
     }
   }), [])

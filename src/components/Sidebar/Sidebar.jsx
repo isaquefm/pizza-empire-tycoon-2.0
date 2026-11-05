@@ -23,8 +23,9 @@ const TABS = [
 export function Sidebar() {
   const tab = useGame((s) => s.tab) || 'Loja'
   const setTab = (t) => useGame.setState({ tab: t })
-  const affordable = useGame((s) => SHOP_ITEMS.some((i) => !s.owned[i.id] && s.level >= i.level && s.money >= i.price && (!i.requires || s.expansions[i.requires]) && (i.id !== 'oven2' || s.unlocked.secondOven)))
+  const affordable = useGame((s) => SHOP_ITEMS.some((i) => s.canBuy(i).ok))
   const staffUnlocked = useGame((s) => s.unlocked.staff && s.staff.length === 0)
+  const claimable = useGame((s) => Object.keys(s.goalsDone).some((id) => !s.goalsClaimed[id]))
   const [collapsed, setCollapsed] = useState(false)
   const Panel = TABS.find((t) => t[0] === tab)?.[2] || StorePanel
   return <aside className={`sim-sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -33,6 +34,7 @@ export function Sidebar() {
         <Icon /><span>{name}</span>
         {name === 'Loja' && affordable && <i className="nav-dot" />}
         {name === 'Equipe' && staffUnlocked && <i className="nav-dot" />}
+        {name === 'Mural' && claimable && <i className="nav-dot" />}
       </button>)}
       <button className="collapse-btn" onClick={() => setCollapsed((v) => !v)} title={collapsed ? 'Expandir painel' : 'Recolher painel'}>{collapsed ? '‹' : '›'}</button>
     </nav>

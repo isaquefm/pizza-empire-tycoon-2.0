@@ -1,19 +1,28 @@
 import { create } from 'zustand'
 import {
-  ovenUpgradeCost, speedUpgradeCost, expandCost, franchiseCost, levelForServed, OFFLINE_RATE,
+  ovenUpgradeCost, speedUpgradeCost, expandCost, franchiseCost, canFranchise, levelForServed, offlineIncome,
   marketingCost, reformCost, MAX_REFORM, MAX_MARKETING, EXPANSIONS, maxTables, maxStaff,
-  operatingCost, maintenanceCost,
+  operatingCost, maintenanceCost, getModifiers,
 } from './Economy/economy'
-import { SHOP_ITEMS } from '../data/shopItems'
+import { SHOP_ITEMS, COLLECTIONS, nextStep, collectionDone } from '../data/shopItems'
 import { RECIPES } from '../data/recipes'
-import { ROLES, makeCandidate, hireCost, trainCost, MAX_STAFF_LEVEL } from '../data/staff'
+import { ROLES, makeCandidate, hireCost, severanceCost, rerollCost, trainCost, MAX_STAFF_LEVEL } from '../data/staff'
+import { GOALS } from '../data/goals'
+import { eventById, rollEvent } from '../data/events'
+import { sfx } from './audio'
 
 const SAVE_KEY = 'pizza-empire-save-v2'
 const LEGACY_KEY = 'pizza-empire-save-v1'
 export const OPEN_HOUR = 8
 export const CLOSE_HOUR = 22
 
-const emptyDay = () => ({ revenue: 0, tips: 0, ingredients: 0, salaries: 0, operating: 0, purchases: 0, maintenance: 0, served: 0, lost: 0, deliveries: 0 })
+// Dias seguidos fechando no vermelho até a falência
+export const BANKRUPT_DAYS = 3
+
+const emptyDay = () => ({ revenue: 0, tips: 0, ingredients: 0, salaries: 0, operating: 0, purchases: 0, maintenance: 0, served: 0, lost: 0, deliveries: 0, recipes: {} })
+
+// Modais que pausam o jogo enquanto estão abertos
+const PAUSING_MODALS = ['daySummary']
 
 const OWNER = { id: 'owner', name: 'Você', role: 'owner', level: 1, speed: 1, eff: 1, salary: 0, seed: 7 }
 
@@ -30,8 +39,12 @@ const initial = () => ({
   day: 1, clock: OPEN_HOUR * 60,
   today: emptyDay(), history: [],
   satHistory: [], totals: { customers: 0, lost: 0, deliveries: 0, pizzas: 0 },
-  candidates: [],
-  settings: { quality: 'alta', labels: true },
+  candidates: [], candidatesDay: null, rerolls: 0,
+  settings: { quality: 'alta', labels: true, sfx: 0.7, music: 0.3, daySummary: true },
+  // ---- metas, eventos e dívida
+  goalsDone: {}, goalsClaimed: {},
+  event: null, debtDays: 0, bankrupt: false,
+  lastSummary: null,
 })
 
 const PERSIST = Object.keys(initial())
@@ -58,9 +71,10 @@ function loadSave() {
     const base = initial()
     const merged = { ...base, ...saved, today: { ...emptyDay(), ...(saved.today || {}) }, totals: { ...base.totals, ...(saved.totals || {}) }, settings: { ...base.settings, ...(saved.settings || {}) }, theme: { ...base.theme, ...(saved.theme || {}) } }
     if (!Array.isArray(merged.staff)) merged.staff = []
-    // Renda offline (regra original): 0,45/s por funcionário, limite de 4 h
-    const elapsed = Math.max(0, Math.min(4 * 3600, (Date.now() - (saved.lastSeen || Date.now())) / 1000))
-    const offline = Math.floor(elapsed * merged.staff.length * OFFLINE_RATE)
+    // Saves antigos guardavam `owned[id] = true`; agora o valor é o nível do item
+    merged.owned = Object.fromEntries(Object.entries(merged.owned || {}).map(([id, v]) => [id, v === true ? 1 : v]))
+    const elapsed = Math.max(0, (Date.now() - (saved.lastSeen || Date.now())) / 1000)
+    const offline = merged.bankrupt ? 0 : offlineIncome(merged, elapsed)
     return { ...merged, money: merged.money + offline, lifetime: merged.lifetime + offline, lastSeen: Date.now(), offlineEarned: offline }
   } catch {
     return { ...initial(), offlineEarned: 0 }
@@ -79,19 +93,30 @@ export const useGame = create((set, get) => ({
   notices: [],
   log: [],
   modal: null,
+  confirmBox: null,
   cameraCmd: null,
+  runId: 0,
 
   // ---------- utilidades
   notify: (text, type = 'info') => {
     const id = ++noticeSeq
+    if (type === 'warn') sfx('warn')
+    if (type === 'level') sfx('level')
     set((s) => ({ notices: [...s.notices.slice(-3), { id, text, type }], log: [{ id, text, type, day: s.day, clock: s.clock }, ...s.log].slice(0, 40) }))
     setTimeout(() => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })), 4200)
   },
-  setModal: (modal) => set({ modal }),
+  setModal: (modal) => set((s) => {
+    if (s.bankrupt) return { modal: 'bankrupt' } // a falência não pode ser dispensada
+    const resume = !modal && PAUSING_MODALS.includes(s.modal)
+    return resume ? { modal, paused: false } : { modal }
+  }),
+  // Caixa de confirmação no visual do jogo
+  ask: (confirmBox) => set({ confirmBox }),
+  closeAsk: () => set({ confirmBox: null }),
   select: (selected) => set({ selected }),
-  setSpeed: (speed) => set({ speed, paused: false }),
-  togglePause: () => set((s) => ({ paused: !s.paused })),
-  camera: (cmd) => set({ cameraCmd: { cmd, t: Date.now() } }),
+  setSpeed: (speed) => set((s) => (s.bankrupt ? {} : { speed, paused: false })),
+  togglePause: () => set((s) => (s.bankrupt ? {} : { paused: !s.paused })),
+  camera: (cmd, pos) => set({ cameraCmd: { cmd, pos, t: Date.now() } }),
   setSetting: (k, v) => set((s) => ({ settings: { ...s.settings, [k]: v } })),
 
   // Gasto genérico — sempre verifica o saldo
@@ -107,7 +132,8 @@ export const useGame = create((set, get) => ({
   wearEquipment: (amount) => set((s) => ({ condition: Math.max(0, s.condition - amount) })),
 
   // Venda concluída (equivalente ao serve() original)
-  completeSale: ({ amount, tip = 0, satisfaction = 70, delivery = false }) => set((s) => {
+  completeSale: ({ amount, tip = 0, satisfaction = 70, delivery = false, recipe = null }) => set((s) => {
+    sfx('sale')
     const served = s.served + 1
     const level = Math.max(s.level, levelForServed(served))
     const repDelta = satisfaction >= 75 ? 1 : satisfaction < 45 ? -1 : 0
@@ -116,7 +142,7 @@ export const useGame = create((set, get) => ({
       served, level, unlocked: unlocks(level, s.unlocked),
       reputation: Math.max(0, Math.min(100, s.reputation + repDelta)),
       money: s.money + total, lifetime: s.lifetime + total,
-      today: { ...s.today, revenue: s.today.revenue + amount, tips: s.today.tips + tip, served: s.today.served + 1, deliveries: s.today.deliveries + (delivery ? 1 : 0) },
+      today: { ...s.today, revenue: s.today.revenue + amount, tips: s.today.tips + tip, served: s.today.served + 1, deliveries: s.today.deliveries + (delivery ? 1 : 0), recipes: recipe ? { ...s.today.recipes, [recipe]: (s.today.recipes[recipe] || 0) + 1 } : s.today.recipes },
       totals: { ...s.totals, customers: s.totals.customers + (delivery ? 0 : 1), deliveries: s.totals.deliveries + (delivery ? 1 : 0), pizzas: s.totals.pizzas + 1 },
       satHistory: delivery ? s.satHistory : [...s.satHistory, satisfaction].slice(-24),
     }
@@ -140,15 +166,46 @@ export const useGame = create((set, get) => ({
     const t = { ...s.today, salaries: s.today.salaries + salaries, operating: s.today.operating + operating }
     const income = t.revenue + t.tips
     const costs = t.ingredients + t.salaries + t.operating + t.maintenance
-    const record = { day: s.day, ...t, profit: income - costs }
+    const { recipes, ...totalsOfDay } = t
+    const record = { day: s.day, ...totalsOfDay, profit: income - costs }
+    const money = s.money - salaries - operating
+    const debtDays = money < 0 ? s.debtDays + 1 : 0
+    const bankrupt = debtDays >= BANKRUPT_DAYS
+
+    // Crítico gastronômico: a nota sai no fechamento
+    const finishedEvent = eventById(s.event)
+    let criticDelta = 0
+    if (finishedEvent?.critic) criticDelta = satisfactionOf(s) >= 75 ? 6 : -4
+
+    const topRecipe = Object.entries(recipes || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+    const nextEvent = rollEvent(s.event)
+    const lastSummary = { record, topRecipe, money, debtDays, criticDelta, finishedEvent: s.event, nextEvent, satisfaction: satisfactionOf(s), condition: s.condition }
+
     set({
-      money: s.money - salaries - operating,
+      money,
+      debtDays,
+      bankrupt,
+      event: nextEvent,
+      lastSummary,
+      reputation: Math.max(0, Math.min(100, s.reputation + criticDelta)),
       history: [...s.history, record].slice(-30),
       today: emptyDay(), day: s.day + 1, clock: OPEN_HOUR * 60,
-      condition: Math.max(0, s.condition - 4),
-      candidates: [],
+      condition: Math.max(0, s.condition - 4 * getModifiers(s).wearMult),
+      candidates: [], candidatesDay: null, rerolls: 0,
     })
-    get().notify(`Dia ${s.day} encerrado · Lucro operacional R$ ${Math.round(record.profit).toLocaleString('pt-BR')} · Salários R$ ${salaries} · Custos R$ ${operating}`, record.profit >= 0 ? 'success' : 'warn')
+    get().ensureCandidates()
+
+    if (bankrupt) {
+      sfx('bankrupt')
+      set({ modal: 'bankrupt', paused: true })
+    } else if (s.settings.daySummary && !get().modal) {
+      sfx('dayEnd')
+      set({ modal: 'daySummary', paused: true })
+    } else {
+      get().notify(`Dia ${s.day} encerrado · Lucro operacional R$ ${Math.round(record.profit).toLocaleString('pt-BR')}`, record.profit >= 0 ? 'success' : 'warn')
+      if (debtDays > 0) get().notify(`Saldo negativo: ${debtDays}/${BANKRUPT_DAYS} dias até a falência!`, 'warn')
+      if (nextEvent) { sfx('event'); get().notify(`Evento do dia: ${eventById(nextEvent).name}. ${eventById(nextEvent).desc}`, 'level') }
+    }
     get().save()
   },
 
@@ -209,21 +266,25 @@ export const useGame = create((set, get) => ({
   },
   canBuy: (item) => {
     const s = get()
-    if (s.owned[item.id]) return { ok: false, reason: 'Adquirido' }
-    if (s.level < item.level) return { ok: false, reason: `Nível ${item.level}` }
-    if (item.id === 'oven2' && !s.unlocked.secondOven) return { ok: false, reason: 'Nível 3' }
+    const step = nextStep(item, s.owned[item.id])
+    if (!step) return { ok: false, reason: 'Adquirido' }
+    if (s.level < step.level) return { ok: false, reason: `Nível ${step.level}` }
     if (item.requires && !s.expansions[item.requires]) return { ok: false, reason: 'Requer ampliação' }
-    if (s.money < item.price) return { ok: false, reason: 'Saldo insuficiente' }
+    if (s.money < step.price) return { ok: false, reason: 'Saldo insuficiente', missing: step.price - s.money }
     return { ok: true }
   },
+  // Compra o item ou o próximo nível dele. Retorna as coleções recém-completadas.
   buyItem: (id) => {
     const item = SHOP_ITEMS.find((i) => i.id === id)
     if (!item) return false
     const check = get().canBuy(item)
     if (!check.ok) return false
-    if (!get().spend(item.price)) return false
-    set((s) => ({ owned: { ...s.owned, [id]: true }, reputation: id === 'sign' ? Math.min(100, s.reputation + 3) : s.reputation }))
-    return true
+    const before = get().owned
+    const owned = before[id] || 0
+    if (!get().spend(nextStep(item, owned).price)) return false
+    set((s) => ({ owned: { ...s.owned, [id]: owned + 1 }, reputation: id === 'sign' && !owned ? Math.min(100, s.reputation + 3) : s.reputation }))
+    const after = get().owned
+    return { collections: COLLECTIONS.filter((c) => collectionDone(c, after) && !collectionDone(c, before)) }
   },
   setTheme: (key, value, cost) => {
     if (get().theme[key] === value) return true
@@ -233,22 +294,37 @@ export const useGame = create((set, get) => ({
   },
 
   // ---------- equipe
-  refreshCandidates: () => {
+  // A lista de candidatos renova de graça uma vez por dia
+  ensureCandidates: () => {
     const s = get()
+    if (!s.unlocked.staff || s.candidatesDay === s.day) return
     const roles = Object.keys(ROLES).filter((r) => s.level >= ROLES[r].level)
-    const candidates = roles.flatMap((r) => [makeCandidate(r, s.level), makeCandidate(r, s.level)])
-    set({ candidates })
+    set({ candidates: roles.flatMap((r) => [makeCandidate(r, s.level), makeCandidate(r, s.level)]), candidatesDay: s.day })
+  },
+  // Trocar a lista antes do dia seguinte tem custo
+  rerollCandidates: () => {
+    const s = get()
+    if (!get().spend(rerollCost(s.level, s.rerolls))) return false
+    const roles = Object.keys(ROLES).filter((r) => s.level >= ROLES[r].level)
+    set({ candidates: roles.flatMap((r) => [makeCandidate(r, s.level), makeCandidate(r, s.level)]), candidatesDay: s.day, rerolls: s.rerolls + 1 })
+    return true
   },
   hire: (candidateId) => {
     const s = get()
     const c = s.candidates.find((x) => x.id === candidateId)
     if (!c || !s.unlocked.staff || s.level < ROLES[c.role].level) return false
     if (s.staff.length >= maxStaff(s)) return false
-    if (!get().spend(hireCost(s.staff.length))) return false
+    if (!get().spend(hireCost(c, s.staff.length))) return false
     set((v) => ({ staff: [...v.staff, { ...c, hiredDay: v.day }], candidates: v.candidates.filter((x) => x.id !== candidateId) }))
     return true
   },
-  fire: (id) => set((s) => ({ staff: s.staff.filter((m) => m.id !== id) })),
+  // A rescisão é obrigatória: pode deixar o saldo negativo
+  fire: (id) => set((s) => {
+    const m = s.staff.find((x) => x.id === id)
+    if (!m) return {}
+    const cost = severanceCost(m)
+    return { staff: s.staff.filter((x) => x.id !== id), money: s.money - cost, today: { ...s.today, salaries: s.today.salaries + cost } }
+  }),
   train: (id) => {
     const s = get(), m = s.staff.find((x) => x.id === id)
     if (!m || m.level >= MAX_STAFF_LEVEL) return false
@@ -276,15 +352,32 @@ export const useGame = create((set, get) => ({
     return { bought, spent }
   },
 
-  // Franquia (regra original: nível 5, reinicia a unidade e sobe um nível)
+  // Franquia: reinicia a unidade e sobe um nível
   buyFranchise: () => {
     const s = get()
-    if (!s.unlocked.franchise || !get().spend(franchiseCost(s.franchises))) return false
+    if (!canFranchise(s) || !get().spend(franchiseCost(s.franchises))) return false
     set((v) => ({
       level: v.level + 1, served: 0, reputation: 0, staff: [], tables: 2, ovenLevel: 1, speedLevel: 1,
       owned: {}, expansions: {}, reformLevel: 0, marketingLevel: 0, condition: 100, franchises: v.franchises + 1,
-      unlocked: { ...v.unlocked, franchise: false }, satHistory: [], candidates: [],
+      satHistory: [], candidates: [], candidatesDay: null, rerolls: 0,
     }))
+    return true
+  },
+
+  // ---------- metas
+  checkGoals: () => {
+    const s = get()
+    const fresh = GOALS.filter((g) => !s.goalsDone[g.id] && g.done(s))
+    if (!fresh.length) return
+    set({ goalsDone: { ...s.goalsDone, ...Object.fromEntries(fresh.map((g) => [g.id, true])) } })
+    sfx('goal')
+    get().notify(fresh.length === 1 ? `Meta concluída: ${fresh[0].text}. Resgate o prêmio no Mural!` : `${fresh.length} metas concluídas! Resgate os prêmios no Mural.`, 'success')
+  },
+  claimGoal: (id) => {
+    const s = get(), g = GOALS.find((x) => x.id === id)
+    if (!g || !s.goalsDone[id] || s.goalsClaimed[id]) return false
+    set({ money: s.money + g.reward, goalsClaimed: { ...s.goalsClaimed, [id]: true } })
+    sfx('buy')
     return true
   },
 
@@ -298,7 +391,7 @@ export const useGame = create((set, get) => ({
   },
   reset: () => {
     try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(LEGACY_KEY) } catch { /* ignore */ }
-    set({ ...initial(), lastSeen: Date.now(), selected: null, log: [], offlineEarned: 0 })
+    set((s) => ({ ...initial(), lastSeen: Date.now(), selected: null, log: [], offlineEarned: 0, modal: null, paused: false, runId: s.runId + 1 }))
   },
 }))
 

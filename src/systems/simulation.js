@@ -26,9 +26,10 @@ export const CUSTOMER_STATE_LABEL = {
 }
 
 function sync(st, mods) {
-  if (franchiseKey !== st.franchises) {
-    if (franchiseKey !== null) resetWorld()
-    franchiseKey = st.franchises
+  const unitKey = `${st.franchises}:${st.runId}`
+  if (franchiseKey !== unitKey) {
+    if (franchiseKey !== null) { resetWorld(); pendingMinutes = 0 }
+    franchiseKey = unitKey
     navKey = null
   }
   const key = st.expansions.terrace ? 'terrace' : 'base'
@@ -104,7 +105,7 @@ function step(dt, st, mods) {
   if (couriers && isOpen(clock)) {
     world.deliveryTimer -= dt
     if (world.deliveryTimer <= 0) {
-      world.deliveryTimer = (16 + Math.random() * 14) / mods.attraction
+      world.deliveryTimer = ((16 + Math.random() * 14) / mods.attraction) * mods.deliveryInterval
       const pending = [...world.orders.values()].filter((o) => o.delivery).length
       if (pending < couriers * 2) {
         const list = unlockedRecipes(st)
@@ -205,7 +206,7 @@ export function stepSimulation(realDt) {
     closeDayIfNeeded(useGame.getState())
   }
   publishT -= realDt
-  if (publishT <= 0) { publishT = 0.25; publish() }
+  if (publishT <= 0) { publishT = 0.25; publish(); useGame.getState().checkGoals() }
 }
 
 // Ajuda manual do gerente: acelera a cozinha por alguns segundos

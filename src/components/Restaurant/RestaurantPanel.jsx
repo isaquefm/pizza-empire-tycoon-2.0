@@ -50,7 +50,7 @@ export function RestaurantPanel() {
     <div className="info-card">
       <b><Hammer size={14} /> Reforma do salão ({s.reformLevel}/{MAX_REFORM})</b>
       <p>Renova acabamentos e móveis: +5 de conforto por nível.</p>
-      <button className="secondary" disabled={s.reformLevel >= MAX_REFORM} onClick={() => s.notify(s.reform() ? 'Reforma concluída! Conforto do salão aumentou.' : 'Saldo insuficiente para reformar.', 'success')}>{s.reformLevel >= MAX_REFORM ? 'Reforma completa' : `Reformar · ${money(reformCost(s.reformLevel))}`}</button>
+      <button className="secondary" disabled={s.reformLevel >= MAX_REFORM} onClick={() => { const ok = s.reform(); s.notify(ok ? 'Reforma concluída! Conforto do salão aumentou.' : 'Saldo insuficiente para reformar.', ok ? 'success' : 'warn') }}>{s.reformLevel >= MAX_REFORM ? 'Reforma completa' : `Reformar · ${money(reformCost(s.reformLevel))}`}</button>
     </div>
     <div className="focus-buttons"><Eye size={13} />
       <button onClick={() => s.camera('kitchen')}>Cozinha</button>

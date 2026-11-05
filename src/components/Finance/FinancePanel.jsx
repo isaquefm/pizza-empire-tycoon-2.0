@@ -27,7 +27,8 @@ function HistoryChart({ history }) {
 export function FinancePanel() {
   const s = useGame()
   const t = s.today
-  const salaries = s.staff.reduce((a, m) => a + m.salary, 0)
+  // Folha do dia + rescisões já pagas hoje
+  const salaries = s.staff.reduce((a, m) => a + m.salary, 0) + t.salaries
   const operating = operatingCost(s)
   const income = t.revenue + t.tips
   const costs = t.ingredients + t.maintenance + salaries + operating
@@ -47,7 +48,7 @@ export function FinancePanel() {
       <Row label="Gorjetas" value={money(t.tips)} tone="pos" />
       <Row label="Ingredientes" value={`− ${money(t.ingredients)}`} tone="neg" />
       <Row label="Manutenção" value={`− ${money(t.maintenance)}`} tone="neg" />
-      <Row label="Salários (fechamento)" value={`− ${money(salaries)}`} tone="neg" />
+      <Row label="Salários e rescisões" value={`− ${money(salaries)}`} tone="neg" />
       <Row label="Custos operacionais (aluguel, energia)" value={`− ${money(operating)}`} tone="neg" />
       <Row label="Resultado previsto do dia" value={money(profit)} tone={profit >= 0 ? 'pos strong' : 'neg strong'} />
       <Row label="Investimentos (compras)" value={money(t.purchases)} />

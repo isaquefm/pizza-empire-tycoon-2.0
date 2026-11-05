@@ -1,33 +1,28 @@
 import React from 'react'
-import { Target, Trophy, Newspaper, Keyboard, CheckCircle2, Circle } from 'lucide-react'
-import { useGame, satisfactionOf } from '../../systems/store'
-import { SectionHead, clockStr } from '../ui'
-
-// Metas de progressão (calculadas a partir do estado real do jogo)
-const GOALS = [
-  { id: 'first', text: 'Entregue o primeiro pedido', done: (s) => s.totals.pizzas >= 1 },
-  { id: 'lvl2', text: 'Alcance o nível 2 e contrate o primeiro funcionário', done: (s) => s.level >= 2 && s.staff.length > 0 },
-  { id: 'decor', text: 'Compre 3 itens na loja', done: (s) => Object.keys(s.owned).length >= 3 },
-  { id: 'tables', text: 'Tenha 6 mesas no salão', done: (s) => s.tables >= 6 },
-  { id: 'recipe', text: 'Libere uma nova receita', done: (s) => s.recipes.length >= 2 },
-  { id: 'oven2', text: 'Instale o segundo forno', done: (s) => !!s.owned.oven2 },
-  { id: 'delivery', text: 'Contrate um entregador e faça 5 entregas', done: (s) => s.totals.deliveries >= 5 },
-  { id: 'sat', text: 'Mantenha a satisfação acima de 85%', done: (s) => s.satHistory.length >= 10 && satisfactionOf(s) >= 85 },
-  { id: 'terrace', text: 'Construa a varanda externa', done: (s) => !!s.expansions.terrace },
-  { id: 'rich', text: 'Fature R$ 10.000 no total', done: (s) => s.lifetime >= 10000 },
-  { id: 'franchise', text: 'Abra a segunda unidade (franquia)', done: (s) => s.franchises >= 1 },
-]
+import { Target, Trophy, Newspaper, Keyboard, CheckCircle2, Circle, Gift } from 'lucide-react'
+import { useGame } from '../../systems/store'
+import { GOALS } from '../../data/goals'
+import { SectionHead, clockStr, money } from '../ui'
 
 export function BoardPanel() {
   const s = useGame()
-  const done = GOALS.filter((g) => g.done(s)).length
-  const next = GOALS.find((g) => !g.done(s))
+  const done = GOALS.filter((g) => s.goalsDone[g.id]).length
+  const next = GOALS.find((g) => !s.goalsDone[g.id])
+  const claim = (g) => { if (s.claimGoal(g.id)) s.notify(`Prêmio resgatado: +${money(g.reward)}!`, 'success') }
   return <>
     <SectionHead kicker="AVISOS DA UNIDADE" title="Mural de gestão" />
-    <div className="notice-card highlight"><Target /><div><b>Próxima meta</b><p>{next ? next.text : 'Todas as metas concluídas — seu império está consolidado!'}</p></div></div>
+    <div className="notice-card highlight"><Target /><div><b>Próxima meta</b><p>{next ? <>{next.text} · prêmio de {money(next.reward)}</> : 'Todas as metas concluídas. Seu império está consolidado!'}</p></div></div>
     <div className="info-card">
       <b><Trophy size={14} /> Metas ({done}/{GOALS.length})</b>
-      <ul className="goal-list">{GOALS.map((g) => { const ok = g.done(s); return <li key={g.id} className={ok ? 'ok' : ''}>{ok ? <CheckCircle2 size={14} /> : <Circle size={14} />} {g.text}</li> })}</ul>
+      <ul className="goal-list">{GOALS.map((g) => {
+        const ok = !!s.goalsDone[g.id], claimed = !!s.goalsClaimed[g.id]
+        return <li key={g.id} className={claimed ? 'ok' : ''}>
+          {ok ? <CheckCircle2 size={14} className="tick" /> : <Circle size={14} />} <span>{g.text}</span>
+          {ok && !claimed
+            ? <button className="claim" onClick={() => claim(g)}><Gift size={11} /> {money(g.reward)}</button>
+            : <em>{money(g.reward)}</em>}
+        </li>
+      })}</ul>
     </div>
     <div className="info-card">
       <b><Newspaper size={14} /> Atividades recentes</b>

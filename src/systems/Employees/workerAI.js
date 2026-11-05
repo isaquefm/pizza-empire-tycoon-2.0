@@ -6,6 +6,7 @@ import { REGISTER, KITCHEN, PICKUP, DOOR_IN, DOOR_OUT, SCOOTER } from '../../dat
 import { createOrder, removeOrder, freeOvenSlot, freePickupSlot, freePrepStation } from '../Orders/orders'
 import { customerOrdered, customerServed, customerPaid } from '../CustomerAI/customerAI'
 import { recipeById } from '../../data/recipes'
+import { sfx } from '../audio'
 
 const BACK = Math.PI // virado para a parede do fundo (−z)
 const FRONT = 0 // virado para o salão (+z)
@@ -126,7 +127,8 @@ function taskCook(w, ctx) {
       move(() => slot.front, BACK, 'Levando ao forno'),
       work(0.8, 'oven', 'Colocando no forno', () => {
         slot.order = o.id; slot.reserved = null; o.oven = slot; o.status = 'baking'; o.bakeT = 0; w.carry = null
-        ctx.api.wearEquipment(0.35)
+        ctx.api.wearEquipment(0.35 * ctx.mods.wearMult)
+        sfx('oven')
       }, BACK),
     ],
   }
@@ -240,7 +242,7 @@ function taskDeliver(w, ctx) {
         w.hidden = false; w.ride = null; w.carry = null
         const fee = 6
         ctx.api.chargeIngredients(o.cost || 0)
-        ctx.api.completeSale({ amount: o.price + fee, tip: Math.random() < 0.4 ? 3 : 0, satisfaction: 80, delivery: true })
+        ctx.api.completeSale({ amount: o.price + fee, tip: Math.random() < 0.4 ? 3 : 0, satisfaction: 80, delivery: true, recipe: o.recipe })
         popup(park.x, park.z, `+R$ ${o.price + fee} delivery`, '#2f9e5b')
         removeOrder(o)
       }),
